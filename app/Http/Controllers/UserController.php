@@ -12,7 +12,7 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = User::all();
+        $users = User::with('position')->get();
 
         return response()->json([
             'message' => 'Data user berhasil diambil',
@@ -26,7 +26,7 @@ class UserController extends Controller
      */
     public function show($id)
     {
-        $user = User::find($id);
+        $user = User::with('position')->find($id);
 
         if (!$user) {
             return response()->json([
@@ -45,9 +45,11 @@ class UserController extends Controller
      */
     public function profile(Request $request)
     {
+        $user = User::with('position')->find($request->user()->id);
+
         return response()->json([
             'message' => 'Data profil user berhasil diambil',
-            'data' => $request->user(),
+            'data' => $user,
         ], 200);
     }
 
@@ -56,7 +58,7 @@ class UserController extends Controller
      */
     public function getByRole($role)
     {
-        $users = User::where('role', $role)->get();
+        $users = User::with('position')->where('role', $role)->get();
 
         if ($users->isEmpty()) {
             return response()->json([
@@ -73,7 +75,8 @@ class UserController extends Controller
     }
 
     /**
-     * Update user data
+     * Update user data via POST
+     * POST /api/users/{id}/update
      */
     public function update(Request $request, $id)
     {
@@ -93,22 +96,48 @@ class UserController extends Controller
             ], 403);
         }
 
-        $validated = $request->validate([
+        // Validate input
+        $request->validate([
             'name' => 'nullable|string|max:255',
             'email' => 'nullable|email|unique:users,email,' . $id,
             'password' => 'nullable|string|min:6|confirmed',
             'role' => 'nullable|in:director,manager,staff',
+            'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        // Remove null values
-        $validated = array_filter($validated, fn($value) => $value !== null);
-
-        // Hash password if provided
-        if (isset($validated['password'])) {
-            $validated['password'] = bcrypt($validated['password']);
+        // Update name if provided
+        if ($request->filled('name')) {
+            $user->name = $request->input('name');
         }
 
-        $user->update($validated);
+        // Update email if provided
+        if ($request->filled('email')) {
+            $user->email = $request->input('email');
+        }
+
+        // Update password if provided
+        if ($request->filled('password')) {
+            $user->password = bcrypt($request->input('password'));
+        }
+
+        // Update role if provided
+        if ($request->filled('role')) {
+            $user->role = $request->input('role');
+        }
+
+        // Handle profile photo upload
+        if ($request->hasFile('profile_photo')) {
+            // Delete old photo if exists
+            if ($user->profile_photo && file_exists(storage_path('app/public/' . $user->profile_photo))) {
+                unlink(storage_path('app/public/' . $user->profile_photo));
+            }
+
+            // Store new photo
+            $photoPath = $request->file('profile_photo')->store('profile_photos', 'public');
+            $user->profile_photo = $photoPath;
+        }
+
+        $user->save();
 
         return response()->json([
             'message' => 'Data user berhasil diperbarui',
@@ -117,7 +146,8 @@ class UserController extends Controller
     }
 
     /**
-     * Delete user
+     * Delete user via POST
+     * POST /api/users/{id}/delete
      */
     public function destroy(Request $request, $id)
     {
@@ -148,13 +178,19 @@ class UserController extends Controller
     /**
      * Check if authenticated user can manage target user
      * Rules:
-     * - Director (tingkat 1) bisa manage siapa saja
-     * - Manager (tingkat 2) bisa manage staff (tingkat 3) saja
-     * - Staff (tingkat 3) tidak bisa manage siapa saja
+     * - Setiap user bisa edit akun sendiri
+     * - Director (tingkat 1) bisa manage tingkat 2 (manager) dan 3 (staff)
+     * - Manager (tingkat 2) bisa manage tingkat 3 (staff) saja
+     * - Staff (tingkat 3) tidak bisa manage user lain
      */
     private function canManageUser($authUser, $targetUser)
     {
-        // Director dapat manage siapa saja
+        // User bisa edit akun sendiri
+        if ($authUser->id === $targetUser->id) {
+            return true;
+        }
+
+        // Director dapat manage siapa saja (manager dan staff)
         if ($authUser->role === 'director') {
             return true;
         }
@@ -164,7 +200,7 @@ class UserController extends Controller
             return true;
         }
 
-        // Staff tidak bisa manage siapa saja, dan tidak bisa manage diri sendiri jika bukan director
+        // Staff dan permission lainnya tidak diizinkan
         return false;
     }
 }

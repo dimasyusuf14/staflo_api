@@ -7,11 +7,12 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'role', 'temp_password', 'temp_password_set_at'])]
+#[Fillable(['name', 'email', 'password', 'role', 'position_id', 'profile_photo', 'temp_password', 'temp_password_set_at'])]
 #[Hidden(['password', 'remember_token', 'temp_password'])]
 class User extends Authenticatable
 {
@@ -33,27 +34,48 @@ class User extends Authenticatable
     }
 
     /**
-     * Check if user is director
+     * Get the position for this user
+     */
+    public function position(): BelongsTo
+    {
+        return $this->belongsTo(Position::class);
+    }
+
+    /**
+     * Check if user is director (level 1)
      */
     public function isDirector(): bool
     {
-        return $this->role === 'director';
+        return $this->position?->level === 1 || $this->role === 'director';
     }
 
     /**
-     * Check if user is manager
+     * Check if user is manager (level 2)
      */
     public function isManager(): bool
     {
-        return $this->role === 'manager';
+        return $this->position?->level === 2 || $this->role === 'manager';
     }
 
     /**
-     * Check if user is staff
+     * Check if user is staff (level 3)
      */
     public function isStaff(): bool
     {
-        return $this->role === 'staff';
+        return $this->position?->level === 3 || $this->role === 'staff';
+    }
+
+    /**
+     * Get user level (1, 2, or 3) - for authorization
+     */
+    public function getLevel(): int
+    {
+        return $this->position?->level ?? match($this->role) {
+            'director' => 1,
+            'manager' => 2,
+            'staff' => 3,
+            default => 3,
+        };
     }
 
     /**

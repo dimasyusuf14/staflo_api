@@ -15,7 +15,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Seed director
+        // Seed positions first
+        $this->call(PositionSeeder::class);
         User::create([
             'name' => 'Direktur',
             'email' => 'direktur@example.com',
