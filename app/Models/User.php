@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['name', 'email', 'password', 'role', 'position_id', 'profile_photo', 'temp_password', 'temp_password_set_at'])]
@@ -18,6 +19,10 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, HasApiTokens;
+
+    protected $appends = [
+        'profile_photo_url',
+    ];
 
     /**
      * Get the attributes that should be cast.
@@ -70,7 +75,7 @@ class User extends Authenticatable
      */
     public function getLevel(): int
     {
-        return $this->position?->level ?? match($this->role) {
+        return $this->position?->level ?? match ($this->role) {
             'director' => 1,
             'manager' => 2,
             'staff' => 3,
@@ -84,5 +89,17 @@ class User extends Authenticatable
     public function canCreateAccounts(): bool
     {
         return in_array($this->role, ['director', 'manager']);
+    }
+
+    /**
+     * Get full public URL for profile photo.
+     */
+    public function getProfilePhotoUrlAttribute(): ?string
+    {
+        if (!$this->profile_photo) {
+            return null;
+        }
+
+        return Storage::url($this->profile_photo);
     }
 }

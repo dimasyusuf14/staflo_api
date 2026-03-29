@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Position;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -127,7 +128,7 @@ class RegisterController extends Controller
             Mail::to($user->email)->send(new WelcomeEmail($user, $tempPassword));
         } catch (\Exception $e) {
             // Log error tapi jangan fail, user sudah dibuat
-            \Log::error('Failed to send welcome email: ' . $e->getMessage());
+            Log::error('Failed to send welcome email: ' . $e->getMessage());
         }
 
         return response()->json([
@@ -179,7 +180,7 @@ class RegisterController extends Controller
         try {
             Mail::to($manager->email)->send(new WelcomeEmail($manager, $tempPassword));
         } catch (\Exception $e) {
-            \Log::error('Failed to send welcome email: ' . $e->getMessage());
+            Log::error('Failed to send welcome email: ' . $e->getMessage());
         }
 
         return response()->json([

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Position;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
 {
@@ -50,6 +52,56 @@ class UserController extends Controller
         return response()->json([
             'message' => 'Data profil user berhasil diambil',
             'data' => $user,
+        ], 200);
+    }
+
+    /**
+     * Update current authenticated user profile
+     * POST /api/users/profile/update
+     */
+    public function updateProfile(Request $request)
+    {
+        $user = User::find($request->user()->id);
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'User tidak ditemukan',
+            ], 404);
+        }
+
+        $request->validate([
+            'name' => 'nullable|string|max:255',
+            'email' => 'nullable|email|unique:users,email,' . $user->id,
+            'password' => 'nullable|string|min:6|confirmed',
+            'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+        ]);
+
+        if ($request->filled('name')) {
+            $user->name = $request->input('name');
+        }
+
+        if ($request->filled('email')) {
+            $user->email = $request->input('email');
+        }
+
+        if ($request->filled('password')) {
+            $user->password = bcrypt($request->input('password'));
+        }
+
+        if ($request->hasFile('profile_photo')) {
+            if ($user->profile_photo && Storage::disk('public')->exists($user->profile_photo)) {
+                Storage::disk('public')->delete($user->profile_photo);
+            }
+
+            $photoPath = $request->file('profile_photo')->store('profile_photos', 'public');
+            $user->profile_photo = $photoPath;
+        }
+
+        $user->save();
+
+        return response()->json([
+            'message' => 'Profil berhasil diperbarui',
+            'data' => $user->load('position'),
         ], 200);
     }
 
@@ -102,8 +154,19 @@ class UserController extends Controller
             'email' => 'nullable|email|unique:users,email,' . $id,
             'password' => 'nullable|string|min:6|confirmed',
             'role' => 'nullable|in:director,manager,staff',
+            'position_id' => 'nullable|exists:positions,id',
             'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
+
+        // Check authorization for role/position promotion
+        if ($request->filled('position_id') || $request->filled('role')) {
+            $newPositionId = $request->filled('position_id') ? $request->input('position_id') : $user->position_id;
+            if (!$this->canPromoteUser($authUser, $user, $newPositionId)) {
+                return response()->json([
+                    'message' => 'Anda tidak memiliki izin untuk mempromosikan user ini ke level tersebut',
+                ], 403);
+            }
+        }
 
         // Update name if provided
         if ($request->filled('name')) {
@@ -123,6 +186,11 @@ class UserController extends Controller
         // Update role if provided
         if ($request->filled('role')) {
             $user->role = $request->input('role');
+        }
+
+        // Update position if provided
+        if ($request->filled('position_id')) {
+            $user->position_id = $request->input('position_id');
         }
 
         // Handle profile photo upload
@@ -176,12 +244,44 @@ class UserController extends Controller
     }
 
     /**
+     * Check if authenticated user can promote target user
+     * Rules:
+     * - Level 1 (Director) bisa promosi ke level manapun
+     * - Level 2 (Manager) hanya bisa promosi ke level 3 (tidak bisa promosi ke level 1 atau 2)
+     * - Level 3 (Staff) tidak bisa promosi siapa saja
+     */
+    private function canPromoteUser($authUser, $targetUser, $newPositionId)
+    {
+        // Get the level of new position
+        $newPosition = Position::find($newPositionId);
+        if (!$newPosition) {
+            return false;
+        }
+
+        $authLevel = $authUser->getLevel();
+        $newLevel = $newPosition->level;
+
+        // Level 1 (Director) dapat promosi ke level manapun
+        if ($authLevel === 1) {
+            return true;
+        }
+
+        // Level 2 (Manager) hanya bisa promosi target user ke level 3 (tidak bisa ke level 1 dan 2)
+        if ($authLevel === 2 && $newLevel === 3) {
+            return true;
+        }
+
+        // Level 3 (Staff) dan permission lainnya tidak diizinkan
+        return false;
+    }
+
+    /**
      * Check if authenticated user can manage target user
      * Rules:
      * - Setiap user bisa edit akun sendiri
-     * - Director (tingkat 1) bisa manage tingkat 2 (manager) dan 3 (staff)
-     * - Manager (tingkat 2) bisa manage tingkat 3 (staff) saja
-     * - Staff (tingkat 3) tidak bisa manage user lain
+     * - Level 1 (Director) bisa manage semua user (level 2 dan 3)
+     * - Level 2 (Manager) tidak bisa manage level 1 dan level 2 (satu level), hanya bisa manage level 3 (staff)
+     * - Level 3 (Staff) hanya bisa edit akun sendiri
      */
     private function canManageUser($authUser, $targetUser)
     {
@@ -190,17 +290,20 @@ class UserController extends Controller
             return true;
         }
 
-        // Director dapat manage siapa saja (manager dan staff)
-        if ($authUser->role === 'director') {
+        $authLevel = $authUser->getLevel();
+        $targetLevel = $targetUser->getLevel();
+
+        // Level 1 (Director) dapat manage siapa saja (level 2 dan 3)
+        if ($authLevel === 1) {
             return true;
         }
 
-        // Manager hanya bisa manage staff
-        if ($authUser->role === 'manager' && $targetUser->role === 'staff') {
+        // Level 2 (Manager) hanya bisa manage level 3 (staff), tidak bisa manage level 1 dan level 2
+        if ($authLevel === 2 && $targetLevel === 3) {
             return true;
         }
 
-        // Staff dan permission lainnya tidak diizinkan
+        // Level 3 (Staff) dan permission lainnya tidak diizinkan
         return false;
     }
 }

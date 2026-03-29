@@ -25,6 +25,40 @@ class PositionController extends Controller
     }
 
     /**
+     * Get all available levels for dropdown/selection
+     * Useful for mobile to populate level selector without knowing numeric values
+     */
+    public function getLevels()
+    {
+        $levels = [
+            [
+                'id' => 1,
+                'value' => 'director',
+                'label' => 'Director',
+                'description' => 'Direktur / Kepala',
+            ],
+            [
+                'id' => 2,
+                'value' => 'manager',
+                'label' => 'Manager',
+                'description' => 'Manajer / Pemimpin Tim',
+            ],
+            [
+                'id' => 3,
+                'value' => 'staff',
+                'label' => 'Staff',
+                'description' => 'Staf / Karyawan',
+            ],
+        ];
+
+        return response()->json([
+            'message' => 'Data level berhasil diambil',
+            'data' => $levels,
+            'total' => count($levels),
+        ], 200);
+    }
+
+    /**
      * Get positions by level
      */
     public function getByLevel($level)
@@ -48,7 +82,7 @@ class PositionController extends Controller
             ], 404);
         }
 
-        $levelName = match($level) {
+        $levelName = match ($level) {
             1 => 'Director',
             2 => 'Manager',
             3 => 'Staff',
@@ -73,7 +107,7 @@ class PositionController extends Controller
         // Manager (level 2) bisa create staff saja (level 3)
         // Staff (level 3) tidak bisa create user
 
-        $creatableLevel = match($userLevel) {
+        $creatableLevel = match ($userLevel) {
             1 => [2, 3],  // Director bisa create level 2 dan 3
             2 => [3],     // Manager bisa create level 3 saja
             default => [], // Staff tidak bisa create
@@ -105,6 +139,10 @@ class PositionController extends Controller
      * Create new position (Director only)
      * Simplified: Only requires name and level
      * Code auto-generated from name
+     *
+     * Level dapat dikirim sebagai:
+     * - String: "director", "manager", "staff"
+     * - Angka: 1, 2, 3
      */
     public function store(Request $request)
     {
@@ -119,8 +157,33 @@ class PositionController extends Controller
         // Validate input - simplified
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:positions,name',
-            'level' => 'required|in:1,2,3',
+            'level' => 'required|string',
         ]);
+
+        // Map level dari string atau angka ke integer
+        $levelMap = [
+            '1' => 1,
+            'director' => 1,
+            '2' => 2,
+            'manager' => 2,
+            '3' => 3,
+            'staff' => 3,
+        ];
+
+        $levelInput = strtolower($validated['level']);
+
+        if (!isset($levelMap[$levelInput])) {
+            return response()->json([
+                'message' => 'Level tidak valid. Gunakan: director/1, manager/2, atau staff/3',
+                'valid_levels' => [
+                    'director' => 1,
+                    'manager' => 2,
+                    'staff' => 3,
+                ],
+            ], 422);
+        }
+
+        $level = $levelMap[$levelInput];
 
         // Auto-generate code dari name
         $code = strtolower(str_replace(' ', '_', $validated['name']));
@@ -137,7 +200,7 @@ class PositionController extends Controller
         $position = Position::create([
             'name' => $validated['name'],
             'code' => $code,
-            'level' => (int)$validated['level'],
+            'level' => $level,
             'description' => null,
             'is_active' => true,
         ]);

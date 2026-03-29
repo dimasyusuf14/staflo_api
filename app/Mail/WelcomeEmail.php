@@ -18,6 +18,8 @@ class WelcomeEmail extends Mailable
     public $user;
     public $password;
     public $role;
+    public $positionName;
+
 
     /**
      * Create a new message instance.
@@ -26,12 +28,14 @@ class WelcomeEmail extends Mailable
     {
         $this->user = $user;
         $this->password = $password;
-        $this->role = match($user->role) {
+        $this->role = match ($user->role) {
             'director' => 'Direktur',
             'manager' => 'Manager / Supervisor',
             'staff' => 'Staff',
             default => $user->role,
         };
+
+        $this->positionName = $user->position?->name ?? $this->role;
     }
 
     /**
@@ -50,12 +54,14 @@ class WelcomeEmail extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'mail.welcome-email',
+            view: 'mail.welcome-email',
             with: [
                 'userName' => $this->user->name,
                 'userEmail' => $this->user->email,
                 'userPassword' => $this->password,
-                'userRole' => $this->role,
+                'userPosition' => $this->positionName,
+                'appDownloadLink' => config('app.download_link'),
+
             ],
         );
     }
