@@ -72,5 +72,8 @@ class DatabaseSeeder extends Seeder
             'role' => 'staff',
             'position_id' => $webDeveloperPosition?->id,
         ]);
+
+        // Seed buckets
+        $this->call(BucketSeeder::class);
     }
 }

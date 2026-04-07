@@ -8,6 +8,8 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\PositionController;
 use App\Http\Controllers\BucketController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\TaskCommentController;
+use App\Http\Controllers\NotificationController;
 
 // Auth routes
 Route::post('/login', [AuthController::class, 'login']);
@@ -20,6 +22,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/profile', [UserController::class, 'profile']);
     Route::post('/users/profile/update', [UserController::class, 'updateProfile']);
+    Route::post('/users/change-password', [UserController::class, 'changePassword']);
     Route::get('/users/{id}', [UserController::class, 'show']);
     Route::get('/users/role/{role}', [UserController::class, 'getByRole']);
 
@@ -45,6 +48,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/tasks/statuses', [TaskController::class, 'statuses']);
     Route::get('/tasks/priorities', [TaskController::class, 'priorities']);
     Route::get('/tasks', [TaskController::class, 'index']);
+    Route::get('/tasks/all', [TaskController::class, 'all']);
     Route::post('/tasks', [TaskController::class, 'store']);
     Route::post('/tasks/{id}/update', [TaskController::class, 'update']);
     Route::post('/tasks/{id}/description', [TaskController::class, 'updateDescription']);
@@ -52,7 +56,20 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/tasks/{id}/status', [TaskController::class, 'updateStatus']);
     Route::post('/tasks/{taskId}/subtasks/{subtaskId}/status', [TaskController::class, 'updateSubtaskStatus']);
     Route::post('/tasks/{id}/attachments', [TaskController::class, 'uploadAttachment']);
+    Route::post('/tasks/{taskId}/attachments/{attachmentId}/delete', [TaskController::class, 'deleteAttachment']);
     Route::post('/tasks/{id}/delete', [TaskController::class, 'destroy']);
+
+    // Task comment routes
+    Route::get('/tasks/{taskId}/comments', [TaskCommentController::class, 'index']);
+    Route::post('/tasks/{taskId}/comments', [TaskCommentController::class, 'store']);
+    Route::post('/tasks/{taskId}/comments/{commentId}/delete', [TaskCommentController::class, 'destroy']);
+
+    // Notification routes
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::post('/notifications/{id}/delete', [NotificationController::class, 'destroy']);
 });
 
 // Register routes

@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppNotification;
 use App\Models\Subtask;
 use App\Models\Task;
+use App\Models\TaskAttachment;
+use App\Models\TaskComment;
 use App\Models\Bucket;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -77,27 +81,85 @@ class TaskController extends Controller
     public function index(Request $request)
     {
         $authUser = $request->user();
-        $userLevel = $authUser->getLevel();
 
         $query = Task::with('assignee:id,name,position_id', 'assigner:id,name', 'bucket:id,name', 'subtasks:id,task_id,title,is_completed', 'attachments:id,task_id,uploaded_by,original_name,file_path,file_type,file_size');
 
-        // Filter based on user level
-        if ($userLevel === 3) {
-            // Staff hanya lihat task yang di-assign ke mereka
-            $query->where('assigned_to', $authUser->id);
-        } elseif ($userLevel === 2) {
-            // Manager lihat task yang di-create mereka atau task untuk staff mereka
-            $query->where(function ($q) use ($authUser) {
-                $q->where('assigned_by', $authUser->id)
-                    ->orWhere('assigned_to', $authUser->id);
-            });
+        // Semua level hanya lihat task yang di-assign ke mereka sendiri
+        $query->where('assigned_to', $authUser->id);
+
+        // Filter by status
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
         }
-        // Level 1 (Director) dapat lihat semua task
+
+        // Filter by priority
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->priority);
+        }
+
+        // Filter by bucket
+        if ($request->filled('bucket_id')) {
+            $query->where('bucket_id', $request->bucket_id);
+        }
+
+        // Search by title
+        if ($request->filled('search')) {
+            $query->where('title', 'like', '%' . $request->search . '%');
+        }
 
         $tasks = $query->orderBy('created_at', 'desc')->get();
 
         return response()->json([
             'message' => 'Daftar task berhasil diambil',
+            'data' => $tasks,
+            'total' => $tasks->count(),
+        ], 200);
+    }
+
+    /**
+     * Get all tasks (Director & Manager only - Level 1 & 2)
+     */
+    public function all(Request $request)
+    {
+        $authUser = $request->user();
+        $userLevel = $authUser->getLevel();
+
+        if (!in_array($userLevel, [1, 2])) {
+            return response()->json(['message' => 'Akses ditolak'], 403);
+        }
+
+        $query = Task::with('assignee:id,name,position_id', 'assigner:id,name', 'bucket:id,name', 'subtasks:id,task_id,title,is_completed', 'attachments:id,task_id,uploaded_by,original_name,file_path,file_type,file_size');
+
+        // Manager hanya lihat task yang mereka buat
+        if ($userLevel === 2) {
+            $query->where('assigned_by', $authUser->id);
+        }
+        // Level 1 (Director) lihat semua task
+
+        // Filter by status
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Filter by priority
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->priority);
+        }
+
+        // Filter by bucket
+        if ($request->filled('bucket_id')) {
+            $query->where('bucket_id', $request->bucket_id);
+        }
+
+        // Search by title
+        if ($request->filled('search')) {
+            $query->where('title', 'like', '%' . $request->search . '%');
+        }
+
+        $tasks = $query->orderBy('created_at', 'desc')->get();
+
+        return response()->json([
+            'message' => 'Daftar semua task berhasil diambil',
             'data' => $tasks,
             'total' => $tasks->count(),
         ], 200);
@@ -171,6 +233,25 @@ class TaskController extends Controller
                 $createdTask->subtasks()->createMany($subtasks);
             }
 
+            // Auto-create first comment from assigned_by
+            TaskComment::create([
+                'task_id' => $createdTask->id,
+                'user_id' => $authUser->id,
+                'comment' => 'Task "' . $createdTask->title . '" telah dibuat dan ditugaskan.',
+            ]);
+
+            // Notify assignee about new task (only if different from creator)
+            if ($createdTask->assigned_to !== $authUser->id) {
+                AppNotification::notify(
+                    $createdTask->assigned_to,
+                    'task_assigned',
+                    'Task Baru Ditugaskan',
+                    $authUser->name . ' menugaskan task "' . $createdTask->title . '" kepada Anda.',
+                    ['task_id' => $createdTask->id, 'task_title' => $createdTask->title],
+                    $authUser->id
+                );
+            }
+
             return $createdTask;
         });
 
@@ -230,6 +311,8 @@ class TaskController extends Controller
             }
         }
 
+        $oldStatus = $task->status;
+
         DB::transaction(function () use ($task, $validated) {
             $taskData = collect($validated)->except('subtasks')->toArray();
             if (!empty($taskData)) {
@@ -251,6 +334,39 @@ class TaskController extends Controller
                 }
             }
         });
+
+        // Notify the other party when status changes
+        if (array_key_exists('status', $validated) && $validated['status'] !== $oldStatus) {
+            $statusLabels = [
+                'belum_dimulai' => 'Belum Dimulai',
+                'dalam_pengerjaan' => 'Dalam Pengerjaan',
+                'selesai' => 'Selesai',
+            ];
+            $newLabel = $statusLabels[$validated['status']] ?? $validated['status'];
+            $notifData = ['task_id' => $task->id, 'task_title' => $task->title, 'new_status' => $validated['status']];
+            // Notify creator if updater is assignee
+            if ($task->assigned_by !== $authUser->id) {
+                AppNotification::notify(
+                    $task->assigned_by,
+                    'task_status_updated',
+                    'Status Task Diperbarui',
+                    $authUser->name . ' mengubah status task "' . $task->title . '" menjadi ' . $newLabel . '.',
+                    $notifData,
+                    $authUser->id
+                );
+            }
+            // Notify assignee if updater is creator
+            if ($task->assigned_to !== $authUser->id) {
+                AppNotification::notify(
+                    $task->assigned_to,
+                    'task_status_updated',
+                    'Status Task Diperbarui',
+                    $authUser->name . ' mengubah status task "' . $task->title . '" menjadi ' . $newLabel . '.',
+                    $notifData,
+                    $authUser->id
+                );
+            }
+        }
 
         return response()->json([
             'message' => 'Task berhasil diupdate',
@@ -368,6 +484,7 @@ class TaskController extends Controller
 
         DB::transaction(function () use ($request, $task, $subtasksPayload, $uploadedFiles, $authUser) {
             $taskData = [];
+            $oldStatus = $task->status;
 
             if ($request->has('status')) {
                 $taskData['status'] = $request->input('status');
@@ -379,6 +496,39 @@ class TaskController extends Controller
 
             if (!empty($taskData)) {
                 $task->update($taskData);
+            }
+
+            // Notify the other party when status changes
+            if (isset($taskData['status']) && $taskData['status'] !== $oldStatus) {
+                $statusLabels = [
+                    'belum_dimulai' => 'Belum Dimulai',
+                    'dalam_pengerjaan' => 'Dalam Pengerjaan',
+                    'selesai' => 'Selesai',
+                ];
+                $newLabel = $statusLabels[$taskData['status']] ?? $taskData['status'];
+                $notifData = ['task_id' => $task->id, 'task_title' => $task->title, 'new_status' => $taskData['status']];
+                // Notify creator if updater is assignee
+                if ($task->assigned_by !== $authUser->id) {
+                    AppNotification::notify(
+                        $task->assigned_by,
+                        'task_status_updated',
+                        'Status Task Diperbarui',
+                        $authUser->name . ' mengubah status task "' . $task->title . '" menjadi ' . $newLabel . '.',
+                        $notifData,
+                        $authUser->id
+                    );
+                }
+                // Notify assignee if updater is creator
+                if ($task->assigned_to !== $authUser->id) {
+                    AppNotification::notify(
+                        $task->assigned_to,
+                        'task_status_updated',
+                        'Status Task Diperbarui',
+                        $authUser->name . ' mengubah status task "' . $task->title . '" menjadi ' . $newLabel . '.',
+                        $notifData,
+                        $authUser->id
+                    );
+                }
             }
 
             if ($subtasksPayload !== null) {
@@ -444,7 +594,41 @@ class TaskController extends Controller
             'status' => 'required|in:belum_dimulai,dalam_pengerjaan,selesai',
         ]);
 
+        $oldStatus = $task->status;
         $task->update(['status' => $validated['status']]);
+
+        // Notify the other party when status changes
+        if ($oldStatus !== $validated['status']) {
+            $statusLabels = [
+                'belum_dimulai' => 'Belum Dimulai',
+                'dalam_pengerjaan' => 'Dalam Pengerjaan',
+                'selesai' => 'Selesai',
+            ];
+            $newLabel = $statusLabels[$validated['status']] ?? $validated['status'];
+            $notifData = ['task_id' => $task->id, 'task_title' => $task->title, 'new_status' => $validated['status']];
+            // Notify creator if updater is assignee
+            if ($task->assigned_by !== $authUser->id) {
+                AppNotification::notify(
+                    $task->assigned_by,
+                    'task_status_updated',
+                    'Status Task Diperbarui',
+                    $authUser->name . ' mengubah status task "' . $task->title . '" menjadi ' . $newLabel . '.',
+                    $notifData,
+                    $authUser->id
+                );
+            }
+            // Notify assignee if updater is creator
+            if ($task->assigned_to !== $authUser->id) {
+                AppNotification::notify(
+                    $task->assigned_to,
+                    'task_status_updated',
+                    'Status Task Diperbarui',
+                    $authUser->name . ' mengubah status task "' . $task->title . '" menjadi ' . $newLabel . '.',
+                    $notifData,
+                    $authUser->id
+                );
+            }
+        }
 
         return response()->json([
             'message' => 'Status task berhasil diupdate',
@@ -530,6 +714,39 @@ class TaskController extends Controller
 
         return response()->json([
             'message' => 'Lampiran task berhasil diupload',
+            'data' => $task->fresh()->load('assignee:id,name', 'assigner:id,name', 'bucket:id,name', 'subtasks:id,task_id,title,is_completed', 'attachments:id,task_id,uploaded_by,original_name,file_path,file_type,file_size'),
+        ], 200);
+    }
+
+    /**
+     * Delete task attachment
+     */
+    public function deleteAttachment(Request $request, $taskId, $attachmentId)
+    {
+        $authUser = $request->user();
+
+        $task = Task::find($taskId);
+
+        if (!$task) {
+            return response()->json(['message' => 'Task tidak ditemukan'], 404);
+        }
+
+        $attachment = TaskAttachment::where('task_id', $taskId)->where('id', $attachmentId)->first();
+
+        if (!$attachment) {
+            return response()->json(['message' => 'Lampiran tidak ditemukan'], 404);
+        }
+
+        // Only uploader, task creator, or Director can delete
+        if ($attachment->uploaded_by !== $authUser->id && $task->assigned_by !== $authUser->id && !$authUser->isDirector()) {
+            return response()->json(['message' => 'Anda tidak memiliki izin menghapus lampiran ini'], 403);
+        }
+
+        Storage::disk('public')->delete($attachment->file_path);
+        $attachment->delete();
+
+        return response()->json([
+            'message' => 'Lampiran berhasil dihapus',
             'data' => $task->fresh()->load('assignee:id,name', 'assigner:id,name', 'bucket:id,name', 'subtasks:id,task_id,title,is_completed', 'attachments:id,task_id,uploaded_by,original_name,file_path,file_type,file_size'),
         ], 200);
     }

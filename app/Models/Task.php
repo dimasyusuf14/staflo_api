@@ -62,6 +62,14 @@ class Task extends Model
      */
     public function attachments(): HasMany
     {
-        return $this->hasMany(TaskAttachment::class);
+        return $this->hasMany(TaskAttachment::class)->latest();
+    }
+
+    /**
+     * Get comments for this task
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TaskComment::class);
     }
 }

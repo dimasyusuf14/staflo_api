@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Position;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
@@ -72,7 +73,6 @@ class UserController extends Controller
         $request->validate([
             'name' => 'nullable|string|max:255',
             'email' => 'nullable|email|unique:users,email,' . $user->id,
-            'password' => 'nullable|string|min:6|confirmed',
             'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
@@ -82,10 +82,6 @@ class UserController extends Controller
 
         if ($request->filled('email')) {
             $user->email = $request->input('email');
-        }
-
-        if ($request->filled('password')) {
-            $user->password = bcrypt($request->input('password'));
         }
 
         if ($request->hasFile('profile_photo')) {
@@ -102,6 +98,33 @@ class UserController extends Controller
         return response()->json([
             'message' => 'Profil berhasil diperbarui',
             'data' => $user->load('position'),
+        ], 200);
+    }
+
+    /**
+     * Change password for authenticated user
+     * POST /api/users/change-password
+     */
+    public function changePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required|string',
+            'password' => 'required|string|min:6|confirmed',
+        ]);
+
+        $user = $request->user();
+
+        if (!Hash::check($request->input('current_password'), $user->password)) {
+            return response()->json([
+                'message' => 'Password saat ini tidak sesuai',
+            ], 422);
+        }
+
+        $user->password = Hash::make($request->input('password'));
+        $user->save();
+
+        return response()->json([
+            'message' => 'Password berhasil diubah',
         ], 200);
     }
 
