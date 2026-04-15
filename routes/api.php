@@ -23,6 +23,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/users/profile', [UserController::class, 'profile']);
     Route::post('/users/profile/update', [UserController::class, 'updateProfile']);
     Route::post('/users/change-password', [UserController::class, 'changePassword']);
+    Route::post('/users/fcm-token', [NotificationController::class, 'updateFcmToken']);
     Route::get('/users/{id}', [UserController::class, 'show']);
     Route::get('/users/role/{role}', [UserController::class, 'getByRole']);
 
@@ -70,6 +71,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::post('/notifications/{id}/delete', [NotificationController::class, 'destroy']);
+
+    // FCM token management
+    Route::post('/notifications/fcm-token', [NotificationController::class, 'updateFcmToken']);
+
+    // FCM push test (development only)
+    Route::post('/notifications/test-push', [NotificationController::class, 'testPush']);
 });
 
 // Register routes

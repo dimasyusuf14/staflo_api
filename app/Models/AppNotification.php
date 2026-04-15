@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\FcmService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -44,13 +45,26 @@ class AppNotification extends Model
      */
     public static function notify(int $userId, string $type, string $title, string $body, array $data = [], ?int $actorId = null): static
     {
-        return static::create([
-            'user_id' => $userId,
+        $notification = static::create([
+            'user_id'  => $userId,
             'actor_id' => $actorId,
-            'type' => $type,
-            'title' => $title,
-            'body' => $body,
-            'data' => empty($data) ? null : $data,
+            'type'     => $type,
+            'title'    => $title,
+            'body'     => $body,
+            'data'     => empty($data) ? null : $data,
         ]);
+
+        // Send FCM push notification if user has a registered device token
+        $user = User::find($userId);
+        if ($user && $user->fcm_token) {
+            app(FcmService::class)->sendToDevice(
+                $user->fcm_token,
+                $title,
+                $body,
+                array_merge(['type' => $type], $data)
+            );
+        }
+
+        return $notification;
     }
 }

@@ -13,8 +13,8 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'role', 'position_id', 'profile_photo', 'temp_password', 'temp_password_set_at'])]
-#[Hidden(['password', 'remember_token', 'temp_password'])]
+#[Fillable(['name', 'email', 'password', 'role', 'position_id', 'profile_photo', 'temp_password', 'temp_password_set_at', 'fcm_token'])]
+#[Hidden(['password', 'remember_token', 'temp_password', 'fcm_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */

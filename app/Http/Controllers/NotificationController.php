@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AppNotification;
+use App\Services\FcmService;
 use Illuminate\Http\Request;
 
 class NotificationController extends Controller
@@ -100,6 +101,54 @@ class NotificationController extends Controller
         return response()->json([
             'message' => 'Notifikasi berhasil dihapus',
         ], 200);
+    }
+
+    /**
+     * Update or remove the authenticated user's FCM device token.
+     * Called from Flutter after login (or when token refreshes).
+     * POST /notifications/fcm-token  { "fcm_token": "<token>" }
+     * DELETE equivalent: send { "fcm_token": null }
+     */
+    public function updateFcmToken(Request $request)
+    {
+        $request->validate([
+            'fcm_token' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $request->user()->update([
+            'fcm_token' => $request->input('fcm_token'),
+        ]);
+
+        return response()->json([
+            'message' => 'FCM token berhasil diperbarui',
+        ], 200);
+    }
+
+    /**
+     * Test: send a push notification to the authenticated user's own device.
+     * POST /notifications/test-push
+     */
+    public function testPush(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user->fcm_token) {
+            return response()->json([
+                'message' => 'FCM token belum terdaftar. Silakan update FCM token terlebih dahulu.',
+            ], 422);
+        }
+
+        $success = app(FcmService::class)->sendToDevice(
+            $user->fcm_token,
+            'Test Notifikasi',
+            'Push notification dari Staflo API berjalan dengan baik! 🎉',
+            ['type' => 'test']
+        );
+
+        return response()->json([
+            'message' => $success ? 'Push notification berhasil dikirim' : 'Gagal mengirim push notification',
+            'success' => $success,
+        ], $success ? 200 : 500);
     }
 
     private function format(AppNotification $n): array
