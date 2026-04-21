@@ -99,8 +99,8 @@ class TaskCommentController extends Controller
             AppNotification::notify(
                 $recipientId,
                 'task_commented',
-                'Komentar Baru pada Task',
-                $authUser->name . ' menambahkan komentar pada task "' . $task->title . '".',
+                $authUser->name . ' berkomentar pada task "' .  $task->title . '"',
+                '"' . $validated['comment'] . '"',
                 ['task_id' => $task->id, 'task_title' => $task->title, 'comment_id' => $comment->id],
                 $authUser->id
             );

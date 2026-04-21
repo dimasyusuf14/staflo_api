@@ -115,8 +115,18 @@ class NotificationController extends Controller
             'fcm_token' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $newToken = $request->input('fcm_token');
+
+        // Lepas token dari user lain yang mungkin masih menyimpan token yang sama
+        // (terjadi jika logout sebelumnya tidak menghapus token)
+        if ($newToken) {
+            \App\Models\User::where('fcm_token', $newToken)
+                ->where('id', '!=', $request->user()->id)
+                ->update(['fcm_token' => null]);
+        }
+
         $request->user()->update([
-            'fcm_token' => $request->input('fcm_token'),
+            'fcm_token' => $newToken,
         ]);
 
         return response()->json([
@@ -151,11 +161,20 @@ class NotificationController extends Controller
         ], $success ? 200 : 500);
     }
 
+    private function resolveIcon(string $type): string
+    {
+        return match (true) {
+            str_starts_with($type, 'task_due_reminder_') => 'warning',
+            default => 'notification',
+        };
+    }
+
     private function format(AppNotification $n): array
     {
         return [
             'id' => $n->id,
             'type' => $n->type,
+            'icon' => $this->resolveIcon($n->type),
             'title' => $n->title,
             'body' => $n->body,
             'data' => $n->data,

@@ -41,6 +41,11 @@ class FcmService
             return false;
         }
 
+        if (empty($this->credentials)) {
+            Log::warning('FCM: Credentials not configured. Skipping push notification.');
+            return false;
+        }
+
         $projectId   = $this->credentials['project_id'];
         $accessToken = $this->getAccessToken();
 
@@ -236,8 +241,18 @@ class FcmService
     {
         $path = config('firebase.credentials_path');
 
-        if (! $path || ! file_exists($path)) {
-            Log::warning('FCM: Service account file not found. Ensure FIREBASE_CREDENTIALS is set in .env.');
+        if (! $path) {
+            Log::warning('FCM: FIREBASE_CREDENTIALS is not set in .env.');
+            return [];
+        }
+
+        // Resolve relative paths from the project root
+        if (! \Illuminate\Support\Str::startsWith($path, ['/', 'C:', 'D:', 'E:'])) {
+            $path = base_path($path);
+        }
+
+        if (! file_exists($path)) {
+            Log::warning('FCM: Service account file not found. Ensure FIREBASE_CREDENTIALS is set in .env.', ['path' => $path]);
             return [];
         }
 
