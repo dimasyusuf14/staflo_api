@@ -5,8 +5,8 @@ FROM node:22-alpine AS node-builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci --no-audit
+COPY package.json ./
+RUN npm install --no-audit --prefer-offline
 
 COPY vite.config.js ./
 COPY resources/ resources/
