@@ -43,6 +43,7 @@ VPS / Server
 ## Prasyarat
 
 ### Di VPS
+
 - OS: Ubuntu 22.04 / 24.04 LTS (direkomendasikan)
 - RAM: minimal 1 GB (2 GB direkomendasikan)
 - Docker Engine >= 24.x
@@ -84,10 +85,10 @@ newgrp docker
 
 Di **Cloudflare Dashboard → DNS**:
 
-| Type | Name     | Content        | Proxy Status     |
-|------|----------|----------------|------------------|
-| A    | `@`      | `<IP_VPS>`     | DNS only (abu-abu) ⚠️ |
-| A    | `www`    | `<IP_VPS>`     | DNS only (abu-abu) ⚠️ |
+| Type | Name  | Content    | Proxy Status          |
+| ---- | ----- | ---------- | --------------------- |
+| A    | `@`   | `<IP_VPS>` | DNS only (abu-abu) ⚠️ |
+| A    | `www` | `<IP_VPS>` | DNS only (abu-abu) ⚠️ |
 
 > **Penting:** Set ke **"DNS only"** (bukan proxied/oranye) saat pertama kali issue SSL. Setelah SSL berhasil, boleh diubah ke **Proxied**.
 
@@ -96,15 +97,16 @@ Di **Cloudflare Dashboard → DNS**:
 1. Buka [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)
 2. Klik **Create Token → Custom Token**
 3. Konfigurasi:
-   - **Token name**: `Certbot DNS`
-   - **Permissions**: `Zone → DNS → Edit`
-   - **Zone Resources**: `Include → Specific zone → <domain-kamu>`
+    - **Token name**: `Certbot DNS`
+    - **Permissions**: `Zone → DNS → Edit`
+    - **Zone Resources**: `Include → Specific zone → <domain-kamu>`
 4. Klik **Continue to summary → Create Token**
 5. Salin token — hanya tampil sekali!
 
 ### 3. SSL Mode di Cloudflare
 
 Setelah SSL berhasil di-issue:
+
 - **SSL/TLS → Overview → Full (Strict)**
 
 ---
@@ -174,6 +176,7 @@ chmod 600 docker/certbot/cloudflare.ini
 ```
 
 Isi file:
+
 ```ini
 dns_cloudflare_api_token = YOUR_CLOUDFLARE_API_TOKEN_HERE
 ```
@@ -187,6 +190,7 @@ mkdir -p storage/app/firebase
 ```
 
 Cara upload dari komputer lokal:
+
 ```bash
 scp service-account.json user@<IP_VPS>:/opt/staflo/storage/app/firebase/
 ```
@@ -228,6 +232,7 @@ chmod +x scripts/init-ssl.sh
 ```
 
 Script ini akan:
+
 1. Meminta sertifikat Let's Encrypt via Cloudflare DNS challenge
 2. Menyimpan sertifikat ke `docker/certbot/certs/`
 3. Mengaktifkan Nginx config HTTPS
@@ -296,6 +301,7 @@ cd /opt/staflo
 ```
 
 Script `deploy.sh` akan:
+
 1. `git pull origin main`
 2. Build ulang Docker image
 3. Restart container
@@ -314,12 +320,14 @@ crontab -e
 ```
 
 Tambahkan baris berikut:
+
 ```cron
 # Cek renewal setiap hari jam 03:00 dinihari
 0 3 * * * /opt/staflo/scripts/renew-ssl.sh >> /var/log/certbot-renew.log 2>&1
 ```
 
 Buat file log:
+
 ```bash
 sudo touch /var/log/certbot-renew.log
 sudo chown $USER:$USER /var/log/certbot-renew.log
@@ -327,6 +335,7 @@ chmod +x /opt/staflo/scripts/renew-ssl.sh
 ```
 
 Test renewal (dry run):
+
 ```bash
 docker compose run --rm certbot renew --dry-run \
   --dns-cloudflare \
@@ -381,14 +390,14 @@ docker compose restart queue
 
 ### Masalah Umum
 
-| Masalah | Solusi |
-|--------|--------|
-| `502 Bad Gateway` | `docker compose restart app` lalu cek `docker compose logs app` |
-| SSL cert tidak ditemukan | Pastikan `docker/certbot/certs/live/<domain>/` ada |
-| DB connection refused | Tunggu health check MySQL: `docker compose ps db` |
-| Storage permission error | `docker compose exec app chmod -R 775 storage` |
-| Queue worker crash | `docker compose restart queue`, cek `docker compose logs queue` |
-| Artisan cache error | `docker compose exec app php artisan config:clear` |
+| Masalah                  | Solusi                                                          |
+| ------------------------ | --------------------------------------------------------------- |
+| `502 Bad Gateway`        | `docker compose restart app` lalu cek `docker compose logs app` |
+| SSL cert tidak ditemukan | Pastikan `docker/certbot/certs/live/<domain>/` ada              |
+| DB connection refused    | Tunggu health check MySQL: `docker compose ps db`               |
+| Storage permission error | `docker compose exec app chmod -R 775 storage`                  |
+| Queue worker crash       | `docker compose restart queue`, cek `docker compose logs queue` |
+| Artisan cache error      | `docker compose exec app php artisan config:clear`              |
 
 ---
 
@@ -430,12 +439,12 @@ staflo_api/
 
 - File `docker/certbot/cloudflare.ini` dan `.env` **JANGAN** di-commit ke Git
 - Tambahkan ke `.gitignore`:
-  ```
-  .env
-  docker/certbot/cloudflare.ini
-  docker/certbot/certs/
-  storage/app/firebase/
-  ```
+    ```
+    .env
+    docker/certbot/cloudflare.ini
+    docker/certbot/certs/
+    storage/app/firebase/
+    ```
 - Gunakan password yang kuat untuk MySQL (`DB_PASSWORD`, `DB_ROOT_PASSWORD`)
 - Aktifkan **Full (Strict)** SSL mode di Cloudflare
 - Pertimbangkan mengaktifkan **Cloudflare Bot Fight Mode** untuk perlindungan tambahan
