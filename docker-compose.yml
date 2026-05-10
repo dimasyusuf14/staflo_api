@@ -1,0 +1,116 @@
+services:
+  # ─────────────────────────────────────────────
+  # PHP-FPM Application
+  # ─────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    container_name: staflo_app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./storage:/var/www/html/storage
+      - ./bootstrap/cache:/var/www/html/bootstrap/cache
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - staflo_net
+
+  # ─────────────────────────────────────────────
+  # Queue Worker
+  # ─────────────────────────────────────────────
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    container_name: staflo_queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600 --timeout=90
+    volumes:
+      - ./storage:/var/www/html/storage
+      - ./bootstrap/cache:/var/www/html/bootstrap/cache
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - staflo_net
+
+  # ─────────────────────────────────────────────
+  # Nginx Web Server
+  # ─────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: staflo_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./public:/var/www/html/public:ro
+      - ./storage/app/public:/var/www/html/storage/app/public:ro
+      - ./docker/certbot/www:/var/www/certbot:ro
+      - ./docker/certbot/certs:/etc/letsencrypt:ro
+    depends_on:
+      - app
+    networks:
+      - staflo_net
+
+  # ─────────────────────────────────────────────
+  # MySQL Database
+  # ─────────────────────────────────────────────
+  db:
+    image: mysql:8.4
+    container_name: staflo_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-staflo}
+      MYSQL_USER: ${DB_USERNAME:-staflo_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - staflo_db_data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - staflo_net
+
+  # ─────────────────────────────────────────────
+  # Certbot — SSL certificate renewal
+  # ─────────────────────────────────────────────
+  certbot:
+    image: certbot/dns-cloudflare:latest
+    container_name: staflo_certbot
+    restart: "no"
+    volumes:
+      - ./docker/certbot/certs:/etc/letsencrypt
+      - ./docker/certbot/www:/var/www/certbot
+      - ./docker/certbot/cloudflare.ini:/etc/letsencrypt/cloudflare.ini:ro
+    networks:
+      - staflo_net
+
+volumes:
+  staflo_db_data:
+    driver: local
+
+networks:
+  staflo_net:
+    driver: bridge

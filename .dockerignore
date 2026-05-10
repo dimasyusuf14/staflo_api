@@ -1,0 +1,24 @@
+# Docker & system
+.git
+.env
+.env.*
+!.env.example
+!.env.production
+node_modules
+vendor
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*
+
+# Dev tools
+.vscode
+.idea
+*.md
+tests
+phpunit.xml
+
+# Build artifacts (will be rebuilt inside container)
+public/build
+public/hot

@@ -20,6 +20,12 @@
 /storage/pail
 /storage/app/firebase/*.json
 /vendor
+
+# Docker secrets & generated certs
+/docker/certbot/cloudflare.ini
+/docker/certbot/certs/
+/docker/nginx/conf.d/app.conf.bak
+/docker/nginx/conf.d/app.conf.rendered
 Homestead.json
 Homestead.yaml
 Thumbs.db
