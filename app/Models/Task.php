@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Task extends Model
@@ -11,7 +12,6 @@ class Task extends Model
     protected $fillable = [
         'title',
         'description',
-        'assigned_to',
         'assigned_by',
         'bucket_id',
         'status',
@@ -26,11 +26,11 @@ class Task extends Model
     ];
 
     /**
-     * Get the user this task is assigned to
+     * Get the users this task is assigned to
      */
-    public function assignee(): BelongsTo
+    public function assignees(): BelongsToMany
     {
-        return $this->belongsTo(User::class, 'assigned_to');
+        return $this->belongsToMany(User::class, 'task_assignees');
     }
 
     /**

@@ -72,6 +72,34 @@ class DatabaseSeeder extends Seeder
             'role' => 'staff',
             'position_id' => $webDeveloperPosition?->id,
         ]);
+        User::create([
+            'name' => 'Staff Dua',
+            'email' => 'staff2@example.com',
+            'password' => bcrypt('?Staflo2026!'),
+            'role' => 'staff',
+            'position_id' => $webDeveloperPosition?->id,
+        ]);
+        User::create([
+            'name' => 'Staff Tiga',
+            'email' => 'staff3@example.com',
+            'password' => bcrypt('?Staflo2026!'),
+            'role' => 'staff',
+            'position_id' => $webDeveloperPosition?->id,
+        ]);
+        User::create([
+            'name' => 'Staff Empat',
+            'email' => 'staff4@example.com',
+            'password' => bcrypt('?Staflo2026!'),
+            'role' => 'staff',
+            'position_id' => $webDeveloperPosition?->id,
+        ]);
+        User::create([
+            'name' => 'Staff Lima',
+            'email' => 'staff5@example.com',
+            'password' => bcrypt('?Staflo2026!'),
+            'role' => 'staff',
+            'position_id' => $webDeveloperPosition?->id,
+        ]);
 
         // Seed buckets
         $this->call(BucketSeeder::class);

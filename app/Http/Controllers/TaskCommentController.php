@@ -25,11 +25,11 @@ class TaskCommentController extends Controller
         }
 
         // Authorization: only allow users related to the task
-        if ($userLevel === 3 && $task->assigned_to !== $authUser->id) {
+        if ($userLevel === 3 && !$task->assignees()->where('users.id', $authUser->id)->exists()) {
             return response()->json(['message' => 'Akses ditolak'], 403);
         }
 
-        if ($userLevel === 2 && $task->assigned_by !== $authUser->id && $task->assigned_to !== $authUser->id) {
+        if ($userLevel === 2 && $task->assigned_by !== $authUser->id && !$task->assignees()->where('users.id', $authUser->id)->exists()) {
             return response()->json(['message' => 'Akses ditolak'], 403);
         }
 
@@ -72,11 +72,11 @@ class TaskCommentController extends Controller
         }
 
         // Authorization: only users related to the task can comment
-        if ($userLevel === 3 && $task->assigned_to !== $authUser->id) {
+        if ($userLevel === 3 && !$task->assignees()->where('users.id', $authUser->id)->exists()) {
             return response()->json(['message' => 'Akses ditolak'], 403);
         }
 
-        if ($userLevel === 2 && $task->assigned_by !== $authUser->id && $task->assigned_to !== $authUser->id) {
+        if ($userLevel === 2 && $task->assigned_by !== $authUser->id && !$task->assignees()->where('users.id', $authUser->id)->exists()) {
             return response()->json(['message' => 'Akses ditolak'], 403);
         }
 
@@ -91,7 +91,8 @@ class TaskCommentController extends Controller
         ]);
 
         // Notify everyone involved in the task except the commenter
-        $recipients = collect([$task->assigned_by, $task->assigned_to])
+        $assigneeIds = $task->assignees()->pluck('users.id')->toArray();
+        $recipients = collect(array_merge([$task->assigned_by], $assigneeIds))
             ->filter(fn($id) => $id && $id !== $authUser->id)
             ->unique();
 
