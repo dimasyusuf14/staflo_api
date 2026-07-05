@@ -151,7 +151,7 @@ class NotificationController extends Controller
         $success = app(FcmService::class)->sendToDevice(
             $user->fcm_token,
             'Test Notifikasi',
-            'Push notification dari Staflo API berjalan dengan baik! 🎉',
+            'Push notification dari Staflo API berjalan dengan baik!',
             ['type' => 'test']
         );
 

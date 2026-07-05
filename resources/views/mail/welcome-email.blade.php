@@ -605,7 +605,7 @@
                                         <div class="hero-badge">
                                             <span>Akun Berhasil Dibuat</span>
                                         </div>
-                                        <div class="hero-title">Selamat Datang,<br>{{ $userName }}! 👋</div>
+                                        <div class="hero-title">Selamat Datang,<br>{{ $userName }}!</div>
                                         <div class="hero-subtitle">Akun Anda di sistem Staflo telah berhasil
                                             disiapkan.<br>Berikut adalah
                                             informasi untuk memulai.</div>

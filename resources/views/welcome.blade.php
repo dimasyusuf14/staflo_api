@@ -1324,7 +1324,7 @@
                     </div>
 
                     <div class="app-action-row">
-                        <button class="btn-install">Instal Sekarang</button>
+                        <a class="btn-install" href="{{ env('APP_DOWNLOAD_LINK') }}">Install Sekarang</a>
                     </div>
 
                     <div class="hero-stats">

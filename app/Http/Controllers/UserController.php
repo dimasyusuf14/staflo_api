@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ResetPasswordEmail;
 use App\Models\User;
 use App\Models\Position;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
@@ -22,6 +24,16 @@ class UserController extends Controller
             'data' => $users,
             'total' => $users->count(),
         ], 200);
+    }
+
+    /**
+     * Generate default password with year
+     * Format: ?Staflo{YEAR}!
+     */
+    private function generateDefaultPassword(): string
+    {
+        $year = date('Y');
+        return "?Staflo{$year}!";
     }
 
     /**
@@ -102,9 +114,36 @@ class UserController extends Controller
     }
 
     /**
+     * Reset Password
+     * POST /api/users/reset-password
+     */
+    public function resetPassword(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+        ]);
+
+        $user = User::findOrFail($validated['user_id']);
+
+        $defaultPassword = $this->generateDefaultPassword();
+
+        $user->update([
+            'password' => Hash::make($defaultPassword),
+        ]);
+
+        Mail::to($user->email)
+            ->send(new ResetPasswordEmail($user, $defaultPassword));
+
+        return response()->json([
+            'message' => 'Password berhasil direset dan telah dikirim ke email pengguna.',
+        ]);
+    }
+
+    /**
      * Change password for authenticated user
      * POST /api/users/change-password
      */
+
     public function changePassword(Request $request)
     {
         $request->validate([

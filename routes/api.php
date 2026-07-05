@@ -31,6 +31,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/users', [UserController::class, 'store']);
     Route::post('/users/{id}/update', [UserController::class, 'update']);
     Route::post('/users/{id}/delete', [UserController::class, 'destroy']);
+    Route::post('/users/reset-password',[UserController::class, 'resetPassword']);
 
     // Position routes
     Route::get('/positions', [PositionController::class, 'index']);
