@@ -29,6 +29,18 @@ class FcmService
     /**
      * Send a push notification to a single device FCM token.
      *
+     * NOTE: This sends a DATA-ONLY message (no top-level `notification` block).
+     * This is intentional — the Flutter app displays the notification manually
+     * via flutter_local_notifications in both foreground and background/killed
+     * states (see FirebaseMessagingService in the Flutter app). If we also send
+     * a `notification` block here, the OS will display its own default
+     * notification on top of the one shown by the app, resulting in duplicates
+     * (this was actually happening before this fix — see the channel_id-aware
+     * `notification` block that used to live in the payload below).
+     *
+     * Because of this, `title` and `body` are sent as part of `data` instead,
+     * which the Flutter app already reads via `data['title']` / `data['body']`.
+     *
      * @param  string  $fcmToken  Device FCM registration token
      * @param  string  $title     Notification title
      * @param  string  $body      Notification body
@@ -46,7 +58,7 @@ class FcmService
             return false;
         }
 
-        $projectId   = $this->credentials['project_id'];
+        $projectId = $this->credentials['project_id'];
         $accessToken = $this->getAccessToken();
 
         if (! $accessToken) {
@@ -54,25 +66,36 @@ class FcmService
             return false;
         }
 
+        // Merge title/body into the data payload so the Flutter side has
+        // everything it needs to build the notification itself.
+        $dataPayload = $this->stringifyData(array_merge($data, [
+            'title' => $title,
+            'body' => $body,
+        ]));
+
         $payload = [
             'message' => [
-                'token'        => $fcmToken,
-                'notification' => [
-                    'title' => $title,
-                    'body'  => $body,
-                ],
-                'data'         => $this->stringifyData($data),
-                'android'      => [
+                'token' => $fcmToken,
+                // Intentionally NO top-level `notification` block — see docblock above.
+                'data' => $dataPayload,
+                'android' => [
                     'priority' => 'high',
-                    'notification' => [
-                        'sound'        => 'default',
-                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-                    ],
+                    // No `android.notification` block either: that config only
+                    // takes effect together with a display notification. Since
+                    // this is a pure data message, the app (foreground,
+                    // background, or killed) is fully responsible for building
+                    // and showing the notification with the correct channel/sound.
                 ],
                 'apns' => [
+                    'headers' => [
+                        // Ensures the background handler / silent push still
+                        // wakes up the app on iOS for a data-only message.
+                        'apns-priority' => '10',
+                        'apns-push-type' => 'background',
+                    ],
                     'payload' => [
                         'aps' => [
-                            'sound' => 'default',
+                            'content-available' => 1,
                         ],
                     ],
                 ],
@@ -85,7 +108,7 @@ class FcmService
                 [
                     'headers' => [
                         'Authorization' => "Bearer {$accessToken}",
-                        'Content-Type'  => 'application/json',
+                        'Content-Type' => 'application/json',
                     ],
                     'json' => $payload,
                 ]
@@ -99,7 +122,7 @@ class FcmService
 
             Log::error('FCM: Failed to send notification.', [
                 'fcm_token' => substr($fcmToken, 0, 20) . '...',
-                'error'     => $responseBody,
+                'error' => $responseBody,
             ]);
 
             return false;
